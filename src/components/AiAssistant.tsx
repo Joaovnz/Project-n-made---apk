@@ -12,9 +12,13 @@ import {
   FileText, 
   ShieldAlert,
   Loader2,
-  BookmarkPlus
+  BookmarkPlus,
+  Cpu,
+  DownloadCloud
 } from 'lucide-react';
 import { queryOfflineAiEngine } from '../utils/offlineAiEngine';
+import { offlineLlmManager } from '../utils/offlineLlmManager';
+import { OfflineLlmModal } from './OfflineLlmModal';
 import { Language } from '../types';
 
 interface Message {
@@ -46,6 +50,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ lang }) => {
   const [loading, setLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const [isLlmModalOpen, setIsLlmModalOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const kbOptions = [
@@ -107,17 +112,33 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ lang }) => {
       };
 
       setMessages(prev => [...prev, botMsg]);
-    } catch (err) {
-      // Local high-performance on-device AI inference engine
-      const localResponse = queryOfflineAiEngine(text, lang);
+    } catch {
+      // High-performance offline LLM inference running locally on-device
+      const msgId = `b-offline-${Date.now()}`;
+      const activeModel = offlineLlmManager.getActiveModel();
+      const isDownloaded = offlineLlmManager.isModelDownloaded(activeModel.id);
+      
       const fallbackMsg: Message = {
-        id: `b-offline-${Date.now()}`,
+        id: msgId,
         sender: 'assistant',
-        text: localResponse.reply,
+        text: '',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        source: 'nomad-local-edge'
+        source: isDownloaded ? activeModel.name : 'nomad-offline-rag'
       };
+
       setMessages(prev => [...prev, fallbackMsg]);
+
+      await offlineLlmManager.generateResponse({
+        prompt: text,
+        module: 'assistant',
+        context: `KB: ${selectedKb}`,
+        lang,
+        onToken: (_tok, fullText) => {
+          setMessages(prev =>
+            prev.map(m => m.id === msgId ? { ...m, text: fullText } : m)
+          );
+        }
+      });
     } finally {
       setLoading(false);
     }
@@ -161,23 +182,34 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ lang }) => {
             </div>
             <div>
               <h2 className="text-xs font-bold text-slate-100 font-mono tracking-wide">
-                {lang === 'pt' ? 'IA TÁTICA NOMAD (OLLAMA & RAG)' : 'NOMAD TACTICAL AI (OLLAMA & RAG)'}
+                {lang === 'pt' ? 'IA TÁTICA NOMAD (LLM OFFLINE)' : 'NOMAD TACTICAL AI (OFFLINE LLM)'}
               </h2>
               <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                <span>QDRANT VECTORS READY</span>
+                <span>MODELO: {offlineLlmManager.getActiveModel().name}</span>
               </div>
             </div>
           </div>
 
-          <button
-            onClick={() => setMessages([messages[0]])}
-            className="p-1.5 text-slate-400 hover:text-rose-400 rounded-md hover:bg-slate-800 transition-colors"
-            title="Limpar histórico"
-            aria-label="Limpar histórico"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setIsLlmModalOpen(true)}
+              className="px-2 py-1 rounded-md bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-[10px] font-mono font-bold flex items-center gap-1 transition-all"
+              title="Gerenciar e Baixar Modelos LLM Offline"
+            >
+              <Cpu className="w-3 h-3" />
+              <span>{lang === 'pt' ? 'Gerenciar LLM' : 'Manage LLM'}</span>
+            </button>
+
+            <button
+              onClick={() => setMessages([messages[0]])}
+              className="p-1.5 text-slate-400 hover:text-rose-400 rounded-md hover:bg-slate-800 transition-colors"
+              title="Limpar histórico"
+              aria-label="Limpar histórico"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* KB Chips */}
@@ -313,6 +345,13 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ lang }) => {
           </button>
         </form>
       </div>
+
+      {/* Offline LLM Downloader & Manager Program Modal */}
+      <OfflineLlmModal
+        isOpen={isLlmModalOpen}
+        onClose={() => setIsLlmModalOpen(false)}
+        lang={lang}
+      />
 
     </div>
   );

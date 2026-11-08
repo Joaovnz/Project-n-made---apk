@@ -10,9 +10,13 @@ import {
   Zap,
   CheckCircle2,
   RefreshCw,
-  Clock
+  Clock,
+  Cpu,
+  Sparkles,
+  Loader2
 } from 'lucide-react';
 import { INITIAL_MESHTASTIC_MESSAGES, MeshtasticMessage } from '../data/nomadData';
+import { offlineLlmManager } from '../utils/offlineLlmManager';
 import { Language } from '../types';
 
 interface MeshCommsProps {
@@ -23,6 +27,21 @@ export const MeshComms: React.FC<MeshCommsProps> = ({ lang }) => {
   const [messages, setMessages] = useState<MeshtasticMessage[]>(INITIAL_MESHTASTIC_MESSAGES);
   const [activeChannel, setActiveChannel] = useState<'LongFast (#0)' | 'Emergência (#911)' | 'Equipe (#1)'>('LongFast (#0)');
   const [input, setInput] = useState('');
+  const [isGeneratingAiPacket, setIsGeneratingAiPacket] = useState(false);
+
+  const handleAiFormatPacket = async () => {
+    setIsGeneratingAiPacket(true);
+    const userPrompt = input.trim() || 'Emergência médica com trauma e hipotermia';
+    const res = await offlineLlmManager.generateResponse({
+      prompt: userPrompt,
+      context: '-15.7801,-47.9292',
+      module: 'mesh',
+      lang
+    });
+    setInput(res.text);
+    setIsGeneratingAiPacket(false);
+  };
+
   const [nodes, setNodes] = useState([
     { id: '!8fe2', name: 'Base-Alpha (Estação Repetidora)', battery: 94, rssi: -78, snr: 9.8, hops: 0, distance: '1.2 km' },
     { id: '!41c9', name: 'Operador-Bravo (Rádio Portátil)', battery: 68, rssi: -92, snr: 5.1, hops: 1, distance: '3.8 km' },
@@ -187,6 +206,23 @@ export const MeshComms: React.FC<MeshCommsProps> = ({ lang }) => {
             placeholder={`Transmitir no canal ${activeChannel}...`}
             className="flex-1 bg-transparent px-2.5 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none font-mono"
           />
+
+          <button
+            type="button"
+            onClick={handleAiFormatPacket}
+            disabled={isGeneratingAiPacket}
+            className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-[10px] font-mono font-bold flex items-center gap-1 transition-all shrink-0"
+            title="Formatar pacote de emergência LoRa via IA Offline"
+          >
+            {isGeneratingAiPacket ? (
+              <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
+            ) : (
+              <Cpu className="w-3 h-3 text-amber-400" />
+            )}
+            <span className="hidden sm:inline">IA LoRa</span>
+            <span className="text-[9px] text-slate-400">&lt;256b</span>
+          </button>
+
           <button
             type="submit"
             disabled={!input.trim()}

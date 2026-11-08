@@ -16,11 +16,14 @@ import {
   Package,
   X,
   CheckCircle,
-  ExternalLink
+  ExternalLink,
+  Globe
 } from 'lucide-react';
 import L from 'leaflet';
 import { MapWaypoint, INITIAL_WAYPOINTS, MAP_REGIONS_DATA, NomadMapRegion } from '../data/nomadData';
 import { coordToMaidenhead, coordToMGRS, calculateDistanceAndBearing } from '../utils/survivalLogic';
+import { MarbleVirtualGlobe } from './MarbleVirtualGlobe';
+import { OfflineMarbleModal } from './OfflineMarbleModal';
 import { Language } from '../types';
 
 interface OfflineMapProps {
@@ -41,6 +44,8 @@ export const OfflineMap: React.FC<OfflineMapProps> = ({ lang }) => {
   const [waypoints, setWaypoints] = useState<MapWaypoint[]>(INITIAL_WAYPOINTS);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showRegionsModal, setShowRegionsModal] = useState(false);
+  const [showMarbleModal, setShowMarbleModal] = useState(false);
+  const [viewMode, setViewMode] = useState<'2D' | '3D'>('2D');
   const [regions, setRegions] = useState<NomadMapRegion[]>(MAP_REGIONS_DATA);
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('ALL');
 
@@ -235,6 +240,34 @@ export const OfflineMap: React.FC<OfflineMapProps> = ({ lang }) => {
           </div>
 
           <div className="flex items-center gap-1.5">
+            {/* View Mode Switcher: 2D Flat Map vs 3D Marble Virtual Globe */}
+            <div className="flex bg-slate-950 p-0.5 rounded-lg border border-slate-700/80">
+              <button
+                onClick={() => {
+                  setViewMode('2D');
+                  setTimeout(() => mapInstanceRef.current?.invalidateSize(), 80);
+                }}
+                className={`px-2 py-1 rounded text-[10px] font-mono font-bold transition-all ${
+                  viewMode === '2D'
+                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                2D MAPA
+              </button>
+              <button
+                onClick={() => setViewMode('3D')}
+                className={`px-2 py-1 rounded text-[10px] font-mono font-bold flex items-center gap-1 transition-all ${
+                  viewMode === '3D'
+                    ? 'bg-cyan-500 text-slate-950 shadow-sm'
+                    : 'text-slate-400 hover:text-cyan-300'
+                }`}
+              >
+                <Globe className="w-3 h-3" />
+                <span>3D MARBLE</span>
+              </button>
+            </div>
+
             <button
               onClick={requestGps}
               className={`p-2 rounded-lg border font-mono text-xs flex items-center gap-1 transition-all ${
@@ -284,15 +317,26 @@ export const OfflineMap: React.FC<OfflineMapProps> = ({ lang }) => {
         </div>
       </div>
 
-      {/* 2. Map Canvas */}
+      {/* 2. Map Renderers: 2D Leaflet Container & 3D Marble Virtual Globe */}
       <div 
         ref={mapContainerRef} 
-        className="w-full h-full z-0" 
+        className={`w-full h-full z-0 ${viewMode === '2D' ? 'block' : 'hidden'}`} 
         style={{ minHeight: '300px' }}
       />
 
-      {/* 3. Bottom Waypoint Quick Bar */}
-      <div className="absolute bottom-2 left-2 right-2 z-[400] max-h-36 overflow-y-auto bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-xl p-2.5 shadow-2xl space-y-1.5">
+      {viewMode === '3D' && (
+        <MarbleVirtualGlobe
+          waypoints={waypoints}
+          currentCoords={currentCoords}
+          onSelectWaypoint={(wp) => {}}
+          onOpenGlobeDownloadModal={() => setShowMarbleModal(true)}
+          lang={lang}
+        />
+      )}
+
+      {/* 3. Bottom Waypoint Quick Bar (Active in 2D View) */}
+      {viewMode === '2D' && (
+        <div className="absolute bottom-2 left-2 right-2 z-[400] max-h-36 overflow-y-auto bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-xl p-2.5 shadow-2xl space-y-1.5">
         <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 pb-1 border-b border-slate-800">
           <span className="font-bold text-slate-200">
             {lang === 'pt' ? 'PONTOS REGISTRADOS' : 'FIELD WAYPOINTS'} ({waypoints.length})
@@ -341,6 +385,7 @@ export const OfflineMap: React.FC<OfflineMapProps> = ({ lang }) => {
           })}
         </div>
       </div>
+      )}
 
       {/* Add Waypoint Modal */}
       {showAddModal && (
@@ -504,6 +549,13 @@ export const OfflineMap: React.FC<OfflineMapProps> = ({ lang }) => {
           </div>
         </div>
       )}
+
+      {/* 5. 3D Marble Virtual Globe Offline Packages Modal */}
+      <OfflineMarbleModal
+        isOpen={showMarbleModal}
+        onClose={() => setShowMarbleModal(false)}
+        lang={lang}
+      />
 
     </div>
   );

@@ -12,7 +12,10 @@ import {
   CheckCircle2, 
   ChevronRight,
   Stethoscope,
-  HeartPulse
+  HeartPulse,
+  Cpu,
+  Sparkles,
+  Loader2
 } from 'lucide-react';
 import { 
   CONDITIONS_DATA, 
@@ -23,6 +26,7 @@ import {
   NomadHomeRemedy 
 } from '../data/nomadData';
 import { findDrugInteractions, evaluateSTARTTriage, TriageEvaluation } from '../utils/survivalLogic';
+import { offlineLlmManager } from '../utils/offlineLlmManager';
 import { Language } from '../types';
 
 interface MedicalReferenceProps {
@@ -45,6 +49,27 @@ export const MedicalReference: React.FC<MedicalReferenceProps> = ({ lang }) => {
   const [capillaryRefillSec, setCapillaryRefillSec] = useState<number>(1.5);
   const [obeysCommands, setObeysCommands] = useState(true);
   const [airwayRepositionBreathing, setAirwayRepositionBreathing] = useState(false);
+
+  // Offline LLM Clinical Opinion state
+  const [clinicalOpinion, setClinicalOpinion] = useState<string | null>(null);
+  const [isGeneratingOpinion, setIsGeneratingOpinion] = useState(false);
+
+  const handleGenerateTriageOpinion = async (triage: TriageEvaluation) => {
+    setIsGeneratingOpinion(true);
+    setClinicalOpinion('');
+    const prompt = `Paciente avaliado via triagem START: ${triage.label} (${triage.category}). Conduta preliminar: ${triage.action}. Respiração: ${breathingRate} rpm, Pulso radial: ${radialPulsePresent ? 'Presente' : 'Ausente'}, Perfusão capilar: ${capillaryRefillSec}s, Consciência: ${obeysCommands ? 'Obedece comandos' : 'Não responsivo'}.`;
+    
+    await offlineLlmManager.generateResponse({
+      prompt,
+      module: 'medical',
+      context: 'Triagem em massa de emergência',
+      lang,
+      onToken: (_tok, fullText) => {
+        setClinicalOpinion(fullText);
+      }
+    });
+    setIsGeneratingOpinion(false);
+  };
 
   // Common quick add meds
   const commonMeds = ['Aspirina', 'Varfarina', 'Ibuprofeno', 'Enalapril', 'Paracetamol', 'Álcool', 'Metronidazol', 'Ciprofloxacino', 'Antiácido', 'Tramadol', 'Fluoxetina'];
@@ -503,6 +528,32 @@ export const MedicalReference: React.FC<MedicalReferenceProps> = ({ lang }) => {
             <p className="mt-2 text-xs leading-relaxed font-sans font-medium">
               <strong>Conduta Imediata:</strong> {triageResult.action}
             </p>
+
+            <div className="mt-3 pt-2.5 border-t border-black/20 flex flex-col gap-2">
+              <button
+                onClick={() => handleGenerateTriageOpinion(triageResult)}
+                disabled={isGeneratingOpinion}
+                className="w-full py-2 px-3 rounded-lg bg-black/40 hover:bg-black/60 border border-white/30 text-white font-mono text-xs font-bold flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {isGeneratingOpinion ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                    <span>Processando Parecer Clínico (LLM Offline)...</span>
+                  </>
+                ) : (
+                  <>
+                    <Cpu className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Gerar Parecer Clínico com IA Offline (LLM)</span>
+                  </>
+                )}
+              </button>
+
+              {clinicalOpinion && (
+                <div className="p-3 rounded-lg bg-black/70 border border-white/20 text-slate-100 text-[11px] font-sans whitespace-pre-wrap leading-relaxed animate-fadeIn">
+                  {clinicalOpinion}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

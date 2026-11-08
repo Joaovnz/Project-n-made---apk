@@ -42,6 +42,8 @@ import {
   verifyOfflineIntegrity, 
   isOfflineSuiteReady 
 } from '../utils/offlineSyncManager';
+import { offlineLlmManager } from '../utils/offlineLlmManager';
+import { OfflineLlmModal } from './OfflineLlmModal';
 
 interface CommandCenterProps {
   vitals: SystemVitals;
@@ -74,6 +76,30 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
   const [storageInfo, setStorageInfo] = useState<{ usageMb: number; quotaMb: number; percentUsed: number }>({ usageMb: 21.8, quotaMb: 4096, percentUsed: 1 });
   const [integrityResults, setIntegrityResults] = useState<{ isHealthy: boolean; checks: { name: string; passed: boolean; details: string }[] } | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
+
+  // Offline LLM States
+  const [showLlmModal, setShowLlmModal] = useState(false);
+  const [sitrepText, setSitrepText] = useState('');
+  const [isGeneratingSitrep, setIsGeneratingSitrep] = useState(false);
+  const [showSitrepModal, setShowSitrepModal] = useState(false);
+
+  const handleGenerateSitrep = async () => {
+    setIsGeneratingSitrep(true);
+    setSitrepText('');
+    setShowSitrepModal(true);
+    const telemetryContext = `Bateria: ${vitals.batteryPercent}% (${vitals.isCharging ? 'Carregando' : 'Descarga'}), Temp: ${vitals.temperatureC}°C, Uptime: ${vitals.uptimeHours}h, RAM: ${vitals.ramUsedGb}GB / ${vitals.ramTotalGb}GB, Ameaça: ${threatLevel}`;
+    
+    await offlineLlmManager.generateResponse({
+      prompt: `Estação tática operando em modo ${vitals.isOffgrid ? '100% OFF-GRID' : 'CONECTADO'}. Avaliação de ameaça: ${threatLevel}.`,
+      context: telemetryContext,
+      module: 'sitrep',
+      lang,
+      onToken: (_tok, fullText) => {
+        setSitrepText(fullText);
+      }
+    });
+    setIsGeneratingSitrep(false);
+  };
 
   React.useEffect(() => {
     getStorageEstimate().then(setStorageInfo);
@@ -281,6 +307,53 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
               <span>{lang === 'pt' ? 'Instalar PWA' : 'Install PWA'}</span>
             </button>
           )}
+        </div>
+      </section>
+
+      {/* 2.55 Offline LLM Model Engine & SITREP Generator */}
+      <section className="bg-gradient-to-r from-emerald-950/40 via-slate-900 to-slate-900 border border-emerald-500/40 rounded-xl p-3.5 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 shrink-0">
+            <Cpu className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-100 font-mono">
+                {lang === 'pt' ? 'MODELO DE LINGUAGEM LLM OFFLINE' : 'OFFLINE LLM MODEL ENGINE'}
+              </span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40">
+                {offlineLlmManager.getActiveModel().name}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-300 mt-0.5">
+              {lang === 'pt'
+                ? 'Motor de IA generativa no aparelho para Triagem, SITREP, Rádio LoRa e Respostas Táticas.'
+                : 'On-device generative LLM intelligence powering Triage, SITREP, Radio and Survival modules.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          <button
+            onClick={handleGenerateSitrep}
+            disabled={isGeneratingSitrep}
+            className="flex-1 sm:flex-none px-3.5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-mono font-bold text-xs flex items-center justify-center gap-1.5 shadow active:scale-95 transition-all disabled:opacity-50"
+          >
+            {isGeneratingSitrep ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <FileText className="w-3.5 h-3.5" />
+            )}
+            <span>{lang === 'pt' ? 'Gerar SITREP Tático' : 'Generate SITREP'}</span>
+          </button>
+
+          <button
+            onClick={() => setShowLlmModal(true)}
+            className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-400 font-mono text-xs border border-emerald-500/30 flex items-center justify-center gap-1.5"
+          >
+            <HardDriveDownload className="w-3.5 h-3.5" />
+            <span>{lang === 'pt' ? 'Gerenciar LLM' : 'Manage Models'}</span>
+          </button>
         </div>
       </section>
 
@@ -785,6 +858,60 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
         onClose={() => setShowApkModal(false)}
         lang={lang}
       />
+
+      {/* Offline LLM Downloader & Manager Program Modal */}
+      <OfflineLlmModal
+        isOpen={showLlmModal}
+        onClose={() => setShowLlmModal(false)}
+        lang={lang}
+      />
+
+      {/* SITREP Viewer Modal */}
+      {showSitrepModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-emerald-500/50 rounded-2xl max-w-xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden font-sans">
+            <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-emerald-400" />
+                <h3 className="font-mono font-bold text-xs text-slate-100 uppercase tracking-wider">
+                  {lang === 'pt' ? 'Relatório de Situação Tático (SITREP) • IA Offline' : 'Tactical SITREP • Offline AI'}
+                </h3>
+              </div>
+              <button 
+                onClick={() => setShowSitrepModal(false)}
+                className="text-slate-400 hover:text-slate-200"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto space-y-3 text-xs leading-relaxed font-sans text-slate-200">
+              {isGeneratingSitrep ? (
+                <div className="flex items-center gap-2.5 p-4 text-emerald-400 font-mono text-xs">
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Sintetizando telemetria com modelo LLM offline local...</span>
+                </div>
+              ) : (
+                <div className="whitespace-pre-wrap font-mono text-xs bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-slate-200">
+                  {sitrepText}
+                </div>
+              )}
+            </div>
+
+            <div className="p-3 border-t border-slate-800 bg-slate-950 flex justify-between items-center text-xs font-mono">
+              <span className="text-[10px] text-slate-400">
+                Modelo: {offlineLlmManager.getActiveModel().name}
+              </span>
+              <button
+                onClick={() => setShowSitrepModal(false)}
+                className="px-4 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold"
+              >
+                {lang === 'pt' ? 'Concluir' : 'Done'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
