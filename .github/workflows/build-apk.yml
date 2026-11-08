@@ -57,6 +57,28 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
+      - name: Configure AGP 9 compatibility and Android SDK licenses
+        run: |
+          echo "=== CONFIGURE AGP 9 COMPATIBILITY ==="
+          cat << 'EOF' > gradle.properties
+          android.useAndroidX=true
+          android.builtInKotlin=false
+          android.newDsl=false
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          EOF
+          echo "Generated gradle.properties:"
+          cat gradle.properties
+
+          echo "=== ACCEPT ANDROID SDK LICENSES ==="
+          if [ -n "$ANDROID_HOME" ]; then
+            mkdir -p "$ANDROID_HOME/licenses"
+            echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > "$ANDROID_HOME/licenses/android-sdk-license"
+            echo "d56f5187479451eabf01fb78af6dfcb131a6481e" >> "$ANDROID_HOME/licenses/android-sdk-license"
+            echo "84831b9409646a918e30573bab4c9c91346d8abd" >> "$ANDROID_HOME/licenses/android-sdk-license"
+            echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > "$ANDROID_HOME/licenses/android-sdk-preview-license"
+          fi
+          yes | sdkmanager --licenses || true
+
       - name: Create temporary debug keystore
         run: |
           echo "=== DEBUG KEYSTORE SETUP ==="
@@ -79,11 +101,14 @@ jobs:
             echo "ERROR: ./debug.keystore does not exist or failed to create."
             exit 1
           fi
-          echo "Temporary debug keystore verified."
+          
+          mkdir -p "$HOME/.android"
+          cp ./debug.keystore "$HOME/.android/debug.keystore"
+          echo "Temporary debug keystore verified and copied to standard location."
 
       - name: Build debug APK
         run: |
-          gradle :app:assembleDebug --stacktrace --no-daemon
+          gradle :app:assembleDebug -Pandroid.builtInKotlin=false -Pandroid.newDsl=false --stacktrace --no-daemon
 
       - name: Verify debug APK
         run: |
