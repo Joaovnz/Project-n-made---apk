@@ -33,23 +33,27 @@ function copyDirRecursive(src: string, dest: string) {
 
 copyDirRecursive(distDir, apkWebAssetsDir);
 
-// Verify index.html in APK assets
+// Verify and patch index.html in APK assets for Android WebView
 const targetIndexHtml = path.join(apkWebAssetsDir, 'index.html');
 if (fs.existsSync(targetIndexHtml)) {
-  const content = fs.readFileSync(targetIndexHtml, 'utf8');
-  if (content.includes('src="./assets/') || content.includes('href="./assets/')) {
-    console.log('[Sync APK Assets] SUCCESS: index.html has relative asset paths verified for Android WebView.');
-  } else if (content.includes('src="/assets/')) {
-    console.warn('[Sync APK Assets] WARNING: Converting absolute paths to relative paths in index.html...');
-    const fixed = content
-      .replace(/src="\/assets\//g, 'src="./assets/')
-      .replace(/href="\/assets\//g, 'href="./assets/')
-      .replace(/href="\/manifest\.json"/g, 'href="./manifest.json"')
-      .replace(/href="\/apple-touch-icon\.png"/g, 'href="./apple-touch-icon.png"')
-      .replace(/href="\/icon\.svg"/g, 'href="./icon.svg"');
-    fs.writeFileSync(targetIndexHtml, fixed, 'utf8');
-    console.log('[Sync APK Assets] index.html successfully patched to relative paths.');
-  }
+  let content = fs.readFileSync(targetIndexHtml, 'utf8');
+  
+  // Ensure relative paths for file:///android_asset/
+  content = content
+    .replace(/src="\/assets\//g, 'src="./assets/')
+    .replace(/href="\/assets\//g, 'href="./assets/')
+    .replace(/href="\/manifest\.json"/g, 'href="./manifest.json"')
+    .replace(/href="\/apple-touch-icon\.png"/g, 'href="./apple-touch-icon.png"')
+    .replace(/href="\/icon\.svg"/g, 'href="./icon.svg"');
+
+  // Strip type="module" and crossorigin to prevent WebView file:// CORS white-screen lockouts
+  content = content
+    .replace(/<script type="module" crossorigin src=/g, '<script defer src=')
+    .replace(/<script type="module" src=/g, '<script defer src=')
+    .replace(/ crossorigin/g, '');
+
+  fs.writeFileSync(targetIndexHtml, content, 'utf8');
+  console.log('[Sync APK Assets] index.html successfully sanitized for WebView (relative paths, no module CORS restrictions).');
 }
 
 const copiedFiles = fs.readdirSync(apkWebAssetsDir);

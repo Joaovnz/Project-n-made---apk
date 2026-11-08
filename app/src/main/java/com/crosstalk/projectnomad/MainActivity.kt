@@ -24,14 +24,24 @@ class MainActivity : AppCompatActivity() {
         
         checkAndRequestPermissions()
 
+        window.decorView.setBackgroundColor(android.graphics.Color.parseColor("#090D16"))
+
         webView = WebView(this)
+        webView.setBackgroundColor(android.graphics.Color.parseColor("#090D16"))
         setContentView(webView)
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            WebView.setWebContentsDebuggingEnabled(true)
+        }
+
+        @Suppress("DEPRECATION")
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
             allowFileAccess = true
             allowContentAccess = true
+            allowFileAccessFromFileURLs = true
+            allowUniversalAccessFromFileURLs = true
             databaseEnabled = true
             useWideViewPort = true
             loadWithOverviewMode = true
@@ -49,6 +59,16 @@ class MainActivity : AppCompatActivity() {
                 // Keep all in-app navigation within webview
                 return false
             }
+
+            override fun onReceivedError(
+                view: WebView?,
+                errorCode: Int,
+                description: String?,
+                failingUrl: String?
+            ) {
+                super.onReceivedError(view, errorCode, description, failingUrl)
+                android.util.Log.e("ProjectNOMAD", "WebView Error [$errorCode]: $description at $failingUrl")
+            }
         }
 
         webView.webChromeClient = object : WebChromeClient() {
@@ -58,6 +78,11 @@ class MainActivity : AppCompatActivity() {
             ) {
                 // Grant geolocation permission to local asset web application
                 callback?.invoke(origin, true, false)
+            }
+
+            override fun onConsoleMessage(consoleMessage: android.webkit.ConsoleMessage?): Boolean {
+                android.util.Log.d("ProjectNOMAD_JS", "${consoleMessage?.message()} [line ${consoleMessage?.lineNumber()}]")
+                return true
             }
         }
 
