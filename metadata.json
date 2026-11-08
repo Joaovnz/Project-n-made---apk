@@ -1,0 +1,10 @@
+{
+  "name": "Project NOMAD Mobile",
+  "description": "Mobile field station & offline survival suite for Project NOMAD. Features offline tactical AI, interactive maps, medical and remedy references, Meshtastic radio comms, and field utilities.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
